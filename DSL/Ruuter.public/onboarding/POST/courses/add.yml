@@ -1,0 +1,55 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Create a new course"
+  method: post
+  accepts: json
+  returns: json
+  namespace: courses
+  allowlist:
+    body:
+      - field: courseCode
+        type: string
+        description: "Course code"
+      - field: courseName
+        type: string
+        description: "Course name"
+      - field: description
+        type: string
+        description: "Course description"
+      - field: credits
+        type: number
+        description: "Credit value"
+      - field: instructorId
+        type: number
+        description: "Instructor ID"
+      - field: schedule
+        type: json
+        description: "Schedule (JSON)"
+
+extractRequestData:
+  assign:
+    courseCode: ${incoming.body.courseCode}
+    courseName: ${incoming.body.courseName}
+    description: ${incoming.body.description}
+    credits: ${incoming.body.credits}
+    instructorId: ${incoming.body.instructorId}
+    schedule: ${incoming.body.schedule}
+
+createCourse:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/insert-course"
+    body:
+      courseCode: ${courseCode}
+      courseName: ${courseName}
+      description: ${description}
+      credits: ${credits}
+      instructorId: ${instructorId}
+      schedule: "${schedule != null ? JSON.stringify(schedule) : null}"
+  result: res
+  next: return_result
+
+return_result:
+  return: "Course created successfully"
+  next: end

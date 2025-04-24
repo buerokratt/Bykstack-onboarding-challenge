@@ -1,0 +1,42 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Get student details by email"
+  method: post
+  accepts: json
+  returns: json
+  namespace: onboarding
+  allowlist:
+    body:
+      - field: email
+        type: string
+        description: "Email of the student"
+
+extractRequestData:
+  assign:
+    email: ${incoming.params.email}
+
+getStudent:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/get-student-overview"
+    body:
+      email: ${email}
+  result: res
+  next: checkIfStudentExists
+
+checkIfStudentExists:
+  switch:
+    - condition: "${res.response.body.length > 0}"
+      next: return_result
+  next: return_not_found
+
+return_result:
+  return: ${res.response.body[0]}
+  status: 200
+  next: end
+
+return_not_found:
+  return: "error: Student not found"
+  status: 404
+  next: end

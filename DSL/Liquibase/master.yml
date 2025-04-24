@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: changelog/onboarding-script-v1.sql
+ 
