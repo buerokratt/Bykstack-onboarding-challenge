@@ -1,0 +1,109 @@
+declare:
+  call: declare
+  version: 0.1
+  description: "Create a new student"
+  method: post
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    body:
+      - field: firstName
+        type: string
+        description: "Student's first name"
+      - field: lastName
+        type: string
+        description: "Student's last name"
+      - field: email
+        type: string
+        description: "Student's email"
+      - field: phone
+        type: string
+        description: "Student's phone number"
+      - field: dateOfBirth
+        type: string
+        description: "Student's date of birth"
+      - field: gender
+        type: string
+        description: "Student's gender"
+      - field: enrollmentDate
+        type: string
+        description: "Student's enrollment date"
+      - field: status
+        type: string
+        description: "Student's status"
+
+extract_request_data:
+  assign:
+    first_name: ${incoming.body.firstName}
+    last_name: ${incoming.body.lastName}
+    email: ${incoming.body.email}
+    phone: ${incoming.body.phone || null}
+    date_of_birth: ${incoming.body.dateOfBirth || null}
+    gender: ${incoming.body.gender || null}
+    enrollment_date: ${incoming.body.enrollmentDate}
+    status: ${incoming.body.status || 'active'}
+  next: check_for_request_data
+
+check_for_request_data:
+  switch:
+    - condition: ${first_name !== null && last_name !== null && email !== null && enrollment_date !== null}
+      next: log_before_call
+  next: return_incorrect_request
+
+log_before_call:
+  log: "About to call ResQL at [#LMS_RESQL]/create-student with data: ${first_name}, ${last_name}"
+  next: create_student
+
+create_student:
+  call: http.post
+  args:
+    url: "[#LMS_RESQL]/create-student"
+    body:
+      first_name: ${first_name}
+      last_name: ${last_name}
+      email: ${email}
+      phone: ${phone}
+      date_of_birth: ${date_of_birth}
+      gender: ${gender}
+      enrollment_date: ${enrollment_date}
+      status: ${status}
+  result: res_create
+  next: check_status
+
+check_status:
+  switch:
+    - condition: ${200 <= res_create.response.statusCodeValue && res_create.response.statusCodeValue < 300}
+      next: assign_success_response
+  next: assign_fail_response
+
+assign_success_response:
+  assign:
+    format_res: {
+      studentId: '${res_create.response.body[0].id}',
+      operationSuccessful: true,
+    }
+  next: return_ok
+
+assign_fail_response:
+  assign:
+    format_res: {
+      studentId: '',
+      operationSuccessful: false,
+    }
+  next: return_bad_request
+
+return_ok:
+  status: 200
+  return: ${format_res}
+  next: end
+
+return_incorrect_request:
+  status: 400
+  return: 'Missing Required Fields'
+  next: end
+
+return_bad_request:
+  status: 400
+  return: ${format_res}
+  next: end

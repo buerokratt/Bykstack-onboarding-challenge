@@ -1,0 +1,116 @@
+declare:
+  call: declare
+  version: 0.1
+  description: "Get course details by course code"
+  method: get
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    params:
+      - field: course_code
+        type: string
+        description: "Code of the course to get details for"
+    body: []
+    header: []
+
+extract_query_params:
+  assign:
+    course_code: ${incoming.params.course_code}
+  next: validate_params
+
+validate_params:
+  switch:
+    - condition: ${course_code !== null && course_code !== undefined && course_code !== ''}
+      next: log_before_call
+  next: return_incorrect_request
+
+log_before_call:
+  log: "Getting course details by code: ${course_code}"
+  next: get_course
+
+get_course:
+  call: http.get
+  args:
+    url: "[#LMS_RESQL]/get-course-by-code"
+    query:
+      course_code: ${course_code}
+  result: res_course
+  next: check_status
+
+check_status:
+  switch:
+    - condition: ${200 <= res_course.response.statusCodeValue && res_course.response.statusCodeValue < 300}
+      next: check_course_found
+  next: assign_fail_response
+
+check_course_found:
+  switch:
+    - condition: ${res_course.response.body && res_course.response.body.length > 0}
+      next: format_schedule
+  next: assign_not_found_response
+
+format_schedule:
+  assign:
+    course_data: ${res_course.response.body[0]}
+    # Use YAML block scalar for multi-line expressions
+    has_schedule: |-
+      ${res_course.response.body[0].schedule != null && 
+        res_course.response.body[0].schedule.value != null}
+    parsed_schedule: |-
+      ${has_schedule ? 
+        JSON.parse(res_course.response.body[0].schedule.value) : 
+        null}
+  next: assign_success_response
+
+assign_success_response:
+  assign:
+    format_res:
+      id: ${course_data.id}
+      courseCode: ${course_data.courseCode}
+      courseName: ${course_data.courseName}
+      description: ${course_data.description}
+      credits: ${course_data.credits}
+      instructor:
+        id: ${course_data.instructorId}
+        firstName: ${course_data.instructorFirstName}
+        lastName: ${course_data.instructorLastName}
+        department: ${course_data.instructorDepartment}
+      schedule: ${parsed_schedule}
+      createdAt: ${course_data.createdAt}
+      updatedAt: ${course_data.updatedAt}
+  next: return_ok
+
+assign_not_found_response:
+  assign:
+    format_res:
+      success: false
+      message: "Course with code ${course_code} not found"
+  next: return_not_found
+
+assign_fail_response:
+  assign:
+    format_res:
+      success: false
+      message: "Error retrieving course details"
+  next: return_bad_request
+
+return_ok:
+  status: 200
+  return: ${format_res}
+  next: end
+
+return_incorrect_request:
+  status: 400
+  return: "Missing required parameter: course_code must be provided"
+  next: end
+
+return_not_found:
+  status: 404
+  return: ${format_res}
+  next: end
+
+return_bad_request:
+  status: 400
+  return: ${format_res}
+  next: end

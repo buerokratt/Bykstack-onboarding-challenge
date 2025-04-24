@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  lms-ruuter-public:
+    container_name: lms-ruuter-public
+    image: ruuter:latest
+    environment:
+      - application.cors.allowedOrigins=http://localhost:8086,http://localhost:8000, http://localhost:8090
+      - application.httpCodesAllowList=200,201,202,400,401,403,500
+      - application.internalRequests.allowedIPs=172.26.0.6,172.26.0.5
+      - application.logging.displayRequestContent=true
+      - application.logging.displayResponseContent=true
+      - application.logging.printStackTrace=true
+      - application.internalRequests.disabled=true
+      - server.port=8086
+    volumes:
+      - ./DSL/Ruuter.public:/DSL
+      - ./constants.ini:/app/constants.ini
+    ports:
+      - 8087:8086
+    networks:
+      - lmsnet
+    cpus: "0.5"
+    mem_limit: "512M"
+
+  lms-postgres:
+    image: postgres:14.1
+    container_name: lms-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=lms_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      lmsnet:
+        ipv4_address: 172.26.0.4
+
+  lms-resql:
+    container_name: lms-resql
+    image: resql:latest
+    depends_on:
+      - lms-postgres
+    environment:
+      - sqlms.datasources.[0].name=byk
+      - sqlms.datasources.[0].jdbcUrl=jdbc:postgresql://lms-postgres:5432/lms_db
+      - sqlms.datasources.[0].username=postgres
+      - sqlms.datasources.[0].password=admin
+      - logging.level.org.springframework.boot=INFO
+    ports:
+      - 8090:8082
+    volumes:
+      - ./DSL/Resql:/DSL
+    networks:
+      lmsnet:
+        ipv4_address: 172.26.0.5
+
+  lms-data-mapper:
+    container_name: lms-data-mapper
+    image: data-mapper
+    environment:
+      - PORT=3000
+      - CONTENT_FOLDER=/data
+    volumes:
+      - ./DSL:/data
+      - ./DSL/DMapper/lms/hbs:/workspace/app/views/lms
+      - ./DSL/DMapper/lms/lib:/workspace/app/lib
+      - shared-volume:/shared 
+    user: "root"
+    ports:
+      - 3009:3000
+    networks:
+      lmsnet:
+        ipv4_address: 172.26.0.9
+
+  lms-s3-ferry:
+    image: s3-ferry:latest
+    container_name: lms-s3-ferry
+    volumes:
+      - shared-volume:/shared
+    env_file:
+      - config.env
+    ports:
+      - "3006:3000"
+    user: "root"
+    networks:
+      lmsnet:
+        ipv4_address: 172.26.0.11
+
+  lms-cron-manager:
+    container_name: cron-manager
+    image: cron-manager-python
+    volumes:
+      - ./DSL/CronManager/DSL:/DSL
+      - ./DSL/CronManager/script:/app/scripts
+      - ./DSL/CronManager/config:/app/config
+      - shared-volume:/shared
+    environment:
+      - server.port=9010
+    user: "root"
+    ports:
+      - 9010:8080
+    networks:
+      lmsnet:
+        ipv4_address: 172.26.0.14
+
+  lms-synthetic-data:
+    build:
+      context: ./synthetic_data_generation
+      dockerfile: Dockerfile
+    container_name: lms-synthetic-data
+    environment:
+      - POSTGRES_HOST=lms-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=lms_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+    volumes:
+      - shared-volume:/shared
+    ports:
+      - "9000:9000"
+    depends_on:
+      - lms-postgres
+    networks:
+      lmsnet:
+        ipv4_address: 172.26.0.15
+
+volumes:
+  postgres-data:
+  shared-volume:
+
+networks:
+  lmsnet:
+    name: lmsnet
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/24
+          gateway: 172.26.0.1

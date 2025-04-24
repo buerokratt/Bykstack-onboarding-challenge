@@ -1,0 +1,98 @@
+declare:
+  call: declare
+  version: 0.1
+  description: "Create a new course"
+  method: post
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    body:
+      - field: courseCode
+        type: string
+        description: "Course code"
+      - field: courseName
+        type: string
+        description: "Course name"
+      - field: description
+        type: string
+        description: "Course description"
+      - field: credits
+        type: int
+        description: "Course credits"
+      - field: instructorId
+        type: int
+        description: "ID of the instructor teaching the course"
+      - field: schedule
+        type: json
+        description: "Course schedule in JSON format"
+
+extract_request_data:
+  assign:
+    course_code: ${incoming.body.courseCode}
+    course_name: ${incoming.body.courseName}
+    description: ${incoming.body.description || null}
+    credits: ${incoming.body.credits}
+    instructor_id: ${incoming.body.instructorId || null}
+    schedule: ${incoming.body.schedule || null}
+  next: validate_request_data
+
+validate_request_data:
+  switch:
+    - condition: ${course_code !== null && course_name !== null && credits !== null && credits > 0}
+      next: log_before_call
+  next: return_incorrect_request
+
+log_before_call:
+  log: "About to call ResQL at [#LMS_RESQL]/create-course with data: ${course_code}, ${course_name}"
+  next: create_course
+
+create_course:
+  call: http.post
+  args:
+    url: "[#LMS_RESQL]/create-course"
+    body:
+      course_code: ${course_code}
+      course_name: ${course_name}
+      description: ${description}
+      credits: ${credits}
+      instructor_id: ${instructor_id}
+      schedule: "${schedule != null ? JSON.stringify(schedule) : null}"
+  result: res_create
+  next: check_status
+
+check_status:
+  switch:
+    - condition: ${200 <= res_create.response.statusCodeValue && res_create.response.statusCodeValue < 300}
+      next: assign_success_response
+  next: assign_fail_response
+
+assign_success_response:
+  assign:
+    format_res:
+      courseId: '${res_create.response.body[0].id}'
+      operationSuccessful: true
+      message: "Course successfully created"
+  next: return_ok
+
+assign_fail_response:
+  assign:
+    format_res:
+      courseId: ""
+      operationSuccessful: false
+  next: return_bad_request
+
+return_ok:
+  status: 200
+  return: ${format_res}
+  next: end
+
+return_incorrect_request:
+  status: 400
+  return: "Missing Required Fields: course code, course name, and credits (>0) are required"
+  next: end
+
+return_bad_request:
+  status: 400
+  return: ${format_res}
+  next: end
