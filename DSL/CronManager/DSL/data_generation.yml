@@ -1,0 +1,5 @@
+data-generation:
+  trigger: off
+  type: exec
+  command: "../app/scripts/synthetic-data-generate.sh -s 10"
+  allowedEnvs: []

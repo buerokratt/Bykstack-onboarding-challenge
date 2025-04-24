@@ -1,0 +1,77 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Update an existing course by course_code"
+  method: post
+  accepts: json
+  returns: json
+  namespace: courses
+  allowlist:
+    body:
+      - field: courseCode
+        type: string
+        description: "Course code (identifier)"
+      - field: courseName
+        type?: string
+        description: "Course name"
+      - field: description
+        type?: string
+        description: "Course description"
+      - field: credits
+        type?: number
+        description: "Credit value"
+      - field: instructorId
+        type?: number
+        description: "Instructor ID"
+      - field: schedule
+        type?: json
+        description: "Schedule (JSON)"
+
+extractRequestData:
+  assign:
+    courseCode: ${incoming.body.courseCode}
+    courseName: ${incoming.body.courseName}
+    description: ${incoming.body.description}
+    credits: ${incoming.body.credits}
+    instructorId: ${incoming.body.instructorId}
+    schedule: ${incoming.body.schedule}
+
+getCourse:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/get-course"
+    body:
+      courseCode: ${courseCode}
+  result: res
+  next: checkIfCourseExists
+
+checkIfCourseExists:
+  switch:
+    - condition: "${res.response.body.length > 0}"
+      next: updateCourse
+  next: return_not_exists
+
+updateCourse:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/update-course"
+    body:
+      courseCode: ${courseCode}
+      courseName: ${courseName}
+      description: ${description}
+      credits: ${credits}
+      instructorId: ${instructorId}
+      schedule: "${schedule != null ? JSON.stringify(schedule) : null}"
+      updatedAt: ${new Date().toISOString()}
+  result: update_course_res
+  next: return_result
+
+return_result:
+  return: "Course updated successfully"
+  status: 200
+  next: end
+
+return_not_exists:
+  return: "error: Course does not exist"
+  status: 400
+  next: end

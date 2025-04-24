@@ -1,0 +1,9 @@
+{
+  "csv": "{{escapeCSV studentData.id}},{{escapeCSV studentData.firstName}},{{escapeCSV studentData.lastName}},{{escapeCSV studentData.email}},{{escapeCSV studentData.phone}},{{formatDate studentData.dateOfBirth}},{{escapeCSV studentData.gender}},{{formatDate studentData.enrollmentDate}},{{escapeCSV studentData.status}},{{formatDateTime studentData.createdAt}},{{formatDateTime studentData.updatedAt}}",
+  "success": true,
+  "rowCount": 1,
+  {{#with (return_student_to_csv studentData)}}
+  "filePath": "{{filePath}}",
+  "fileName": "{{fileName}}"
+  {{/with}}
+}

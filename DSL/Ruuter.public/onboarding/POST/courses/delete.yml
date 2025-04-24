@@ -1,0 +1,51 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Delete a course by course_code"
+  method: post
+  accepts: json
+  returns: json
+  namespace: onboarding
+  allowlist:
+    body:
+      - field: courseCode
+        type: string
+        description: "Course code (identifier)"
+
+extractRequestData:
+  assign:
+    courseCode: ${incoming.body.courseCode}
+
+getCourse:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/get-course"
+    body:
+      courseCode: ${courseCode}
+  result: res
+  next: checkIfCourseExists
+
+checkIfCourseExists:
+  switch:
+    - condition: "${res.response.body.length > 0}"
+      next: deleteCourse
+  next: return_not_exists
+
+deleteCourse:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/delete-course"
+    body:
+      courseCode: ${courseCode}
+  result: delete_course_res
+  next: return_result
+
+return_result:
+  return: "Course deleted successfully"
+  status: 200
+  next: end
+
+return_not_exists:
+  return: "error: Course does not exist"
+  status: 400
+  next: end

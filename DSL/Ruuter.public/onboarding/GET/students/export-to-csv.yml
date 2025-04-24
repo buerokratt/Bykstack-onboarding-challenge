@@ -1,0 +1,119 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Export student details to CSV"
+  method: get
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    params:
+      - field: email
+        type: string
+        description: "Email of the student to export"
+
+extract_params:
+  assign:
+    email: ${incoming.params.email}
+  next: validate_params
+
+validate_params:
+  switch:
+    - condition: ${email != null && email != ''}
+      next: fetch_student_data
+  next: return_invalid_params
+
+return_invalid_params:
+  status: 400
+  return: "Invalid parameters: email is required"
+  next: end
+
+fetch_student_data:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/get-student-overview"
+    body:
+      email: ${email}
+  result: student_data
+  next: check_fetch_status
+
+check_fetch_status:
+  switch:
+    - condition: ${200 <= student_data.response.statusCodeValue && student_data.response.statusCodeValue < 300}
+      next: convert_to_csv
+  next: return_fetch_error
+
+return_fetch_error:
+  status: 500
+  return: '{"operationSuccessful": false, "message": "Failed to fetch student data"}'
+  next: end
+
+convert_to_csv:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_DMAPPER]/hbs/onboarding/return_students_list_csv"
+    headers:
+      type: json
+    body: 
+      studentData: ${student_data.response.body[0]}
+  result: csv_data
+  next: check_conversion_status
+
+check_conversion_status:
+  switch:
+    - condition: ${200 <= csv_data.response.statusCodeValue && csv_data.response.statusCodeValue < 300}
+      next: prepare_response_data
+  next: return_conversion_error
+
+return_conversion_error:
+  status: 500
+  return: '{"operationSuccessful": false, "message": "Failed to convert student data to CSV"}'
+  next: end
+
+prepare_response_data:
+  assign:
+    response_data: ${csv_data.response.body}
+    format_res:
+      operationSuccessful: true
+      filePath: ${response_data.filePath}
+      fileName: ${response_data.fileName}
+      csvContent: ${response_data.csv}
+      rowCount: ${response_data.rowCount || 1}
+  next: check_s3_transfer_needed
+
+check_s3_transfer_needed:
+  switch:
+    - condition: ${format_res.filePath != null && format_res.filePath != ''}
+      next: transfer_to_s3
+  next: return_success
+
+transfer_to_s3:
+  call: http.post
+  args:
+    url: "http://onboarding-s3-ferry:3000/v1/files/copy"
+    headers:
+      Content-Type: "application/json"
+    body:
+      sourceFilePath: ${format_res.fileName}
+      sourceStorageType: "FS"
+      destinationFilePath: ${'students/' + format_res.fileName}
+      destinationStorageType: "S3"
+  result: s3_transfer_res
+  next: check_transfer_status
+
+check_transfer_status:
+  switch:
+    - condition: ${200 <= s3_transfer_res.response.statusCodeValue && s3_transfer_res.response.statusCodeValue < 300}
+      next: update_with_s3_path
+  next: return_success
+
+update_with_s3_path:
+  assign:
+    format_res.s3Path: ${'/erangi-onboarding-lms/students/' + format_res.fileName}
+    format_res.s3TransferSuccess: true
+  next: return_success
+
+return_success:
+  status: 200
+  return: ${format_res}
+  next: end

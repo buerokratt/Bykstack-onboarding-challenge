@@ -1,0 +1,30 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Description placeholder for 'STUDENTS'"
+  method: post
+  accepts: json
+  returns: json
+  namespace: onboarding
+  allowlist:
+    body:
+      - field: page
+        type: number
+        description: "Body field 'page'"
+      - field: pageSize
+        type: number
+        description: "Body field 'pageSize'"
+
+getStudents:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/get-students-list"
+    body:
+      page: ${Number(incoming.params.page)}
+      page_size: ${Number(incoming.params.pageSize)}
+  result: res
+  next: return_result
+
+return_result:
+  return: ${res.response.body}
+  next: end

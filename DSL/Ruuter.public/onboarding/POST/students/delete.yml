@@ -1,0 +1,32 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Decription placeholder for 'DELETE'"
+  method: post
+  accepts: json
+  returns: json
+  namespace: onboarding
+  allowlist:
+    body:
+      - field: email
+        type: string
+        description: "Body field 'email'"
+
+extractRequestData:
+  assign:
+    email: ${incoming.body.email}
+
+setConfigurationValue:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/delete-student"
+    body:
+      email: ${email}
+      updatedAt: ${new Date().toISOString()}
+      status: "inactive"
+  result: res
+
+return_result:
+  return: "Student deleted successfully"
+  status: 200
+  next: end

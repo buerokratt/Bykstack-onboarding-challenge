@@ -1,0 +1,83 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Decription placeholder for 'ADD'"
+  method: post
+  accepts: json
+  returns: json
+  namespace: onboarding
+  allowlist:
+    body:
+      - field: firstName
+        type: string
+      - field: lastName
+        type: string
+      - field: email
+        type: string
+      - field: enrollmentDate
+        type: string
+      - field: phone
+        type: string
+      - field: dateOfBirth
+        type: string
+      - field: gender
+        type: string
+      - field: status
+        type: string
+      - field: createdAt
+        type: string
+      - field: updatedAt
+        type: string
+
+extractRequestData:
+  assign:
+    firstName: ${incoming.body.firstName}
+    lastName: ${incoming.body.lastName}
+    email: ${incoming.body.email}
+    enrollmentDate: ${incoming.body.enrollmentDate}
+    phone: ${incoming.body.phone}
+    dateOfBirth: ${incoming.body.dateOfBirth}
+    gender: ${incoming.body.gender}
+    status: ${incoming.body.status}
+
+getUser:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/get-student"
+    body:
+      email: ${email}
+  result: res
+  next: checkIfStudentExists
+
+checkIfStudentExists:
+  switch:
+    - condition: "${res.response.body.length > 0}"
+      next: return_exists
+  next: addStudent
+
+addStudent:
+  call: http.post
+  args:
+    url: "[#ONBOARDING_RESQL]/insert-student"
+    body:
+      firstName: ${firstName}
+      lastName: ${lastName}
+      email: ${email}
+      phone: ${phone}
+      dateOfBirth: ${dateOfBirth} # YYYY-MM-DD format
+      gender: ${gender}
+      enrollmentDate: ${enrollmentDate} # YYYY-MM-DD format
+      status: "active"
+      createdAt: ${new Date().toISOString()}
+      updatedAt: ${new Date().toISOString()}
+  result: ${add_student_res}
+  next: return_result
+
+return_result:
+  return: "Student added successfully"
+  next: end
+
+return_exists:
+  return: "error: Student already exists"
+  status: 400
+  next: end
