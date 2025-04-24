@@ -1,0 +1,5 @@
+student-data-export:
+  trigger: off
+  type: exec
+  command: "../app/scripts/fetch_students.sh -s 10"
+  allowedEnvs: []

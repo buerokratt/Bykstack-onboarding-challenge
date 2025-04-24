@@ -1,0 +1,155 @@
+declaration:
+  call: declare
+  version: 0.1
+  description: "Export student details to CSV"
+  method: get
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    params:
+      - field: studentEmail
+        type: string
+        description: "Email of the student to export"
+
+extract_params:
+  assign:
+    email: ${incoming.params.studentEmail}
+  next: validate_params
+
+validate_params:
+  switch:
+    - condition: ${email != null && email != ''}
+      next: fetch_student_data
+  next: return_invalid_params
+
+return_invalid_params:
+  status: 400
+  return: "Invalid parameters: studentEmail is required"
+  next: end
+
+fetch_student_data:
+  call: http.post
+  args:
+    url: "[#LMS_RESQL]/lms/get-students"
+    body:
+      email: ${email}
+  result: student_data
+  next: check_fetch_status
+
+check_fetch_status:
+  switch:
+    - condition: ${200 <= student_data.response.statusCodeValue && student_data.response.statusCodeValue < 300}
+      next: prepare_conversion_data
+  next: return_fetch_error
+
+return_fetch_error:
+  status: 500
+  return: '{"operationSuccessful": false, "message": "Failed to fetch student data"}'
+  next: end
+
+prepare_conversion_data:
+  assign:
+    student: ${student_data.response.body[0]}
+  next: debug_student_data
+
+debug_student_data:
+  log: "Student data structure: ${student}"
+  next: convert_to_csv
+
+convert_to_csv:
+  call: http.post
+  args:
+    url: "[#LMS_DATAMAPPER]/return_student_to_csv"
+    headers:
+      type: json
+    body: 
+      studentData: ${student}
+  result: csv_data
+  next: debug_raw_response
+
+debug_raw_response:
+  log: "Raw CSV response: ${csv_data.response.body}"
+  next: check_conversion_status
+
+check_conversion_status:
+  switch:
+    - condition: ${200 <= csv_data.response.statusCodeValue && csv_data.response.statusCodeValue < 300}
+      next: parse_file_info
+  next: return_conversion_error
+
+parse_file_info:
+  assign:
+    response_data: ${csv_data.response.body}
+    # Extract CSV content
+    csv_content: ${response_data.csv}
+    # Extract row count
+    row_count: ${response_data.rowCount || 1}
+    # Extract file path and name directly since they're now strings
+    file_path: ${response_data.filePath}
+    file_name: ${response_data.fileName}
+  next: debug_extracted_values
+
+debug_extracted_values:
+  log: "Extracted values: filePath=${file_path}, fileName=${file_name}"
+  next: format_response
+
+format_response:
+  assign:
+    format_res:
+      operationSuccessful: true
+      filePath: ${file_path}
+      fileName: ${file_name}
+      csvContent: ${csv_content}
+      rowCount: ${row_count}
+  next: check_s3_transfer_needed
+
+check_s3_transfer_needed:
+  switch:
+    - condition: ${file_path != null && file_path != ''}
+      next: transfer_to_s3
+  next: return_success
+
+transfer_to_s3:
+  log: "Transferring file to S3: ${file_path}"
+  call: http.post
+  args:
+    url: "http://lms-s3-ferry:3000/v1/files/copy"
+    headers:
+      Content-Type: "application/json"
+    body:
+      sourceFilePath: ${file_name}
+      sourceStorageType: "FS"
+      destinationFilePath: ${'students/' + file_name}
+      destinationStorageType: "S3"
+  result: s3_transfer_res
+  next: check_transfer_status
+
+check_transfer_status:
+  log: "S3 transfer response: ${s3_transfer_res.response.body}"
+  switch:
+    - condition: ${200 <= s3_transfer_res.response.statusCodeValue && s3_transfer_res.response.statusCodeValue < 300}
+      next: update_format_with_s3_path
+  next: return_success
+
+update_format_with_s3_path:
+  assign:
+    format_res:
+      operationSuccessful: true
+      filePath: ${file_path}
+      fileName: ${file_name}
+      csvContent: ${csv_content}
+      rowCount: ${row_count}
+      s3Path: ${'/bimsara-onboarding-lms/students/' + file_name}
+      s3TransferSuccess: true
+  next: return_success
+
+return_conversion_error:
+  status: 500
+  return: '{"operationSuccessful": false, "message": "Failed to convert student data to CSV"}'
+  next: end
+
+return_success:
+  status: 200
+  return: ${format_res}
+  next: end

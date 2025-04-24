@@ -1,0 +1,79 @@
+declare:
+  call: declare
+  version: 0.1
+  description: "List all students"
+  method: get
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    params:
+      - field: limit
+        type: int
+        description: "Maximum number of students to return"
+        optional: true
+      - field: offset
+        type: int
+        description: "Number of students to skip"
+        optional: true
+      - field: status
+        type: string
+        description: "Filter students by their status (e.g., 'active', 'inactive')"
+        optional: true
+    body: [] 
+    header: []
+
+extract_query_params:
+  assign:
+    limit: ${incoming.params.limit}
+    offset: ${incoming.params.offset}
+    status: ${incoming.params.status}
+  next: log_before_call
+
+log_before_call:
+  log: "About to call ResQL at [#LMS_RESQL]/list-students"
+  next: get_students
+
+get_students:
+  call: http.get
+  args:
+    url: "[#LMS_RESQL]/list-students"
+    query:
+      limit: ${limit}
+      offset: ${offset}
+      status: ${status}
+  result: res_list
+  next: check_status
+
+check_status:
+  switch:
+    - condition: ${200 <= res_list.response.statusCodeValue && res_list.response.statusCodeValue < 300}
+      next: assign_success_response
+  next: assign_fail_response
+
+assign_success_response:
+  assign:
+    format_res:
+      students: ${res_list.response.body}
+      total: ${res_list.response.body.length}
+      success: true
+  next: return_ok
+
+assign_fail_response:
+  assign:
+    format_res:
+      students: []
+      total: 0
+      success: false
+      error: "Failed to retrieve students"
+  next: return_bad_request
+
+return_ok:
+  status: 200
+  return: ${format_res}
+  next: end
+
+return_bad_request:
+  status: 400
+  return: ${format_res}
+  next: end

@@ -1,0 +1,119 @@
+declare:
+  call: declare
+  version: 0.1
+  description: "Delete a course by course code"
+  method: post
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    body:
+      - field: courseCode
+        type: string
+        description: "Code of the course to delete"
+
+extract_body_data:
+  assign:
+    course_code: ${incoming.body.courseCode}
+  next: validate_course_code
+
+validate_course_code:
+  switch:
+    - condition: ${course_code !== null && course_code !== undefined && course_code !== ''}
+      next: log_before_check
+  next: return_incorrect_request
+
+log_before_check:
+  log: "Checking if course with code ${course_code} exists before deleting"
+  next: check_course_exists
+
+check_course_exists:
+  call: http.post
+  args:
+    url: "[#LMS_RESQL]/lms/get-course"
+    body:
+      courseCode: ${course_code}
+  result: res_check
+  next: check_course_found
+
+check_course_found:
+  switch:
+    - condition: ${res_check.response.body && res_check.response.body.length > 0}
+      next: log_before_delete
+  next: return_not_exists
+
+log_before_delete:
+  log: "About to delete course with code: ${course_code}"
+  next: delete_course
+
+delete_course:
+  call: http.post
+  args:
+    url: "[#LMS_RESQL]/lms/delete-course"
+    body:
+      course_code: ${course_code}
+  result: res_delete
+  next: check_delete_status
+
+check_delete_status:
+  switch:
+    - condition: ${200 <= res_delete.response.statusCodeValue && res_delete.response.statusCodeValue < 300}
+      next: check_deleted_rows
+  next: assign_fail_response
+
+check_deleted_rows:
+  switch:
+    - condition: ${res_delete.response.body && res_delete.response.body.length > 0}
+      next: assign_success_response
+  next: assign_not_found_response
+
+assign_success_response:
+  assign:
+    format_res:
+      courseId: ${res_delete.response.body[0].id}
+      courseCode: ${res_delete.response.body[0].courseCode}
+      courseName: ${res_delete.response.body[0].courseName}
+      message: "Course successfully deleted"
+      operationSuccessful: true
+  next: return_ok
+
+assign_not_found_response:
+  assign:
+    format_res:
+      courseCode: ${course_code}
+      operationSuccessful: false
+      message: "Course not found"
+  next: return_not_found
+
+assign_fail_response:
+  assign:
+    format_res:
+      courseCode: ${course_code}
+      operationSuccessful: false
+      message: "Failed to delete course"
+  next: return_bad_request
+
+return_ok:
+  status: 200
+  return: ${format_res}
+  next: end
+
+return_incorrect_request:
+  status: 400
+  return: "Missing required courseCode parameter"
+  next: end
+
+return_not_exists:
+  status: 404
+  return: "Error: Course with code ${course_code} does not exist"
+  next: end
+
+return_not_found:
+  status: 404
+  return: ${format_res}
+  next: end
+
+return_bad_request:
+  status: 400
+  return: ${format_res}
+  next: end

@@ -1,0 +1,3 @@
+databaseChangeLog:
+  - include:
+      file: changelog/v1-lms-schema.sql

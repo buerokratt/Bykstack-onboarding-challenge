@@ -1,0 +1,94 @@
+declare:
+  call: declare
+  version: 0.1
+  description: "Delete a student by ID"
+  method: post
+  accepts: json
+  returns: json
+  namespace: lms
+  allowlist:
+    body:
+      - field: student_id
+        type: int
+        description: "ID of the student to delete"
+
+extract_body_data:
+  assign:
+    student_id: ${incoming.body.student_id}
+  next: validate_student_id
+
+validate_student_id:
+  switch:
+    - condition: ${student_id !== null && student_id !== ''}
+      next: log_before_call
+  next: return_incorrect_request
+
+log_before_call:
+  log: "About to delete student with ID: ${student_id}"
+  next: delete_student
+
+delete_student:
+  call: http.post
+  args:
+    url: "[#LMS_RESQL]/delete-student"
+    body:
+      student_id: ${student_id}
+  result: res_delete
+  next: check_status
+
+check_status:
+  switch:
+    - condition: ${200 <= res_delete.response.statusCodeValue && res_delete.response.statusCodeValue < 300}
+      next: check_deleted_rows
+  next: assign_fail_response
+
+check_deleted_rows:
+  switch:
+    - condition: ${res_delete.response.body && res_delete.response.body.length > 0}
+      next: assign_success_response
+  next: assign_not_found_response
+
+assign_success_response:
+  assign:
+    format_res:
+      studentId: ${res_delete.response.body[0].id}
+      studentName: ${res_delete.response.body[0].firstName + ' ' + res_delete.response.body[0].lastName}
+      message: "Student successfully deleted"
+      operationSuccessful: true
+  next: return_ok
+
+assign_not_found_response:
+  assign:
+    format_res:
+      studentId: ${student_id}
+      operationSuccessful: false
+      message: "Student not found"
+  next: return_not_found
+
+assign_fail_response:
+  assign:
+    format_res:
+      studentId: ${student_id}
+      operationSuccessful: false
+      message: "Failed to delete student"
+  next: return_bad_request
+
+return_ok:
+  status: 200
+  return: ${format_res}
+  next: end
+
+return_incorrect_request:
+  status: 400
+  return: "Missing required student_id parameter"
+  next: end
+
+return_not_found:
+  status: 404
+  return: ${format_res}
+  next: end
+
+return_bad_request:
+  status: 400
+  return: ${format_res}
+  next: end
