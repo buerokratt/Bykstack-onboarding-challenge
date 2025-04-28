@@ -1,0 +1,93 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter public student update
+  method: post
+  accepts: json
+  returns: json
+  namespace: student
+  allowlist:
+    headers: []
+    body:
+      - field: id
+        type: number
+        description: Student ID to update
+      - field: optional_first_name
+        type: string
+        description: Optional first name of the student
+        optional: true
+      - field: optional_last_name
+        type: string
+        description: Optional last name of the student
+        optional: true
+      - field: optional_email
+        type: string
+        description: Optional email of the student
+        optional: true
+      - field: optional_phone
+        type: string
+        description: Optional phone number of the student
+        optional: true
+      - field: optional_date_of_birth
+        type: string
+        description: Optional date of birth of the student
+        optional: true
+      - field: optional_student_status
+        type: string
+        description: Optional status of the student
+        optional: true
+    params: []
+
+extractRequestData:
+  assign:
+    id: ${incoming.body.id}
+    optional_first_name: ${incoming.body.optional_first_name || null}
+    optional_last_name: ${incoming.body.optional_last_name || null}
+    optional_email: ${incoming.body.optional_email || null}
+    optional_phone: ${incoming.body.optional_phone || null}
+    optional_date_of_birth: ${incoming.body.optional_date_of_birth || null}
+    optional_gender: $incoming.body.optional_gender || null}
+    optional_student_status: ${incoming.body.optional_student_status || null}
+  next: check_if_exists
+
+check_if_exists:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/retrieve-student-details"
+    body: 
+      id: ${id}
+  result: res
+  next: switch_exists
+
+switch_exists:
+  switch:
+    - condition: ${res.response.body.length == 0}
+      next: return_no_such_student
+    - condition: ${res.response.body.length > 0}
+      next: update_student
+
+return_no_such_student:
+  status: 400
+  return: "Error: No such student"
+  next: end
+
+update_student:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/update-student"
+    body: 
+      id: ${id}
+      optional_first_name: ${optional_first_name}
+      optional_last_name: ${optional_last_name}
+      optional_email: ${optional_email}
+      optional_phone: ${optional_phone}
+      optional_date_of_birth: ${optional_date_of_birth}
+      optional_gender: ${optional_gender}
+      optional_student_status: ${optional_student_status}
+  result: res
+  return: ${res.response}
+  next: return_result
+
+return_result:
+  status: 200
+  return: ${res.response.body}

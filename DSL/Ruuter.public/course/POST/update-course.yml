@@ -1,0 +1,87 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter  update course
+  method: post
+  accepts: json
+  returns: json
+  namespace: course
+  allowlist:
+    headers: []
+    body:
+      - field: course_code
+        type: number  
+        description: course ID 
+      - field: course_name
+        type: string  
+        description: course name 
+        optional: true
+      - field: description
+        type: string  
+        description: course description
+        optional: true
+      - field: credits
+        type: number  
+        description: course credits 
+        optional: true
+      - field: instructor_id
+        type: number  
+        description: instructor ID
+        optional: true
+      - field: schedule
+        type: string  
+        description: course schedule
+        optional: true
+    params: []
+    headers: []
+
+extract_request_data:
+  assign:
+    course_code: ${incoming.body.course_code}
+    course_name: ${incoming.body.course_name || null}
+    description: ${incoming.body.description || null}
+    credits: ${incoming.body.credits || null}
+    instructor_id: ${incoming.body.instructor_id || null}
+    schedule: ${incoming.body.schedule || null}
+  next: check_if_exists
+
+check_if_exists:
+  call: http.post
+  args: 
+    url: "[#RESQL]/course/retrieve-courses-list"
+    body: 
+      course_code: ${course_code}
+  result: res
+  next: switch_exists
+
+switch_exists:
+  switch:
+    - condition: ${res.response.body.length == 0}
+      next: return_no_such_course
+    - condition: ${res.response.body.length > 0}
+      next: update_course
+  next: return_no_such_course
+
+return_no_such_course:
+  status: 404
+  return: 'Error: No course found with the provided course code.'
+  next: end
+
+update_course:
+  call: http.post
+  args:
+    url: "[#RESQL]/course/update-course"
+    body: 
+      course_code: ${course_code}
+      course_name: ${course_name}
+      description: ${description}
+      credits: ${credits}
+      instructor_id: ${instructor_id}
+      schedule: ${schedule}
+  result: res
+  return: ${res.response}
+  next: return_course_details
+
+return_course_details:
+  status: 200
+  return: ${res.response.body}

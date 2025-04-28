@@ -1,0 +1,56 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter public student details
+  method: post
+  accepts: json
+  returns: json
+  namespace: student
+  allowlist:
+    headers: []
+    body:
+      - field: id
+        type: number  
+        description: Student ID to retrieve details
+    params: []
+    headers: []
+
+extract_request_data:
+  assign:
+    id: ${incoming.body.id}
+  next: check_if_exists
+
+check_if_exists:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/retrieve-student-details"
+    body: 
+      id: ${id}
+  result: res
+  next: switch_exists
+
+switch_exists:
+  switch:
+    - condition: ${res.response.body.length == 0}
+      next: return_no_such_student
+    - condition: ${res.response.body.length > 0}
+      next: retrieve_student_details
+
+return_no_such_student:
+  status: 400
+  return: "Error: No such student"
+  next: end
+
+retrieve_student_details:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/retrieve-student-details"
+    body: 
+      id: ${id}
+  result: res
+  return: ${res.response}
+  next: return_student_details
+
+return_student_details:
+  status: 200
+  return: ${res.response.body}

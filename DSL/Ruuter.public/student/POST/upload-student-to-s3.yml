@@ -1,0 +1,70 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL to upload student data to S3
+  method: post
+  accepts: json
+  returns: json
+  namespace: student
+  allowlist:
+    headers: []
+    body:
+      - field: id
+        type: number
+        description: Student ID to upload
+    params: []
+
+extract_request_data:
+  assign:
+    id: ${incoming.body.id}
+  next: return_student
+
+return_student:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/retrieve-student-details"
+    body:
+      id: ${id}
+  result: res
+  next: assign_csv_data
+
+assign_csv_data:
+  assign:
+    student_data: ${res.response.body[0]}
+  next: convert_to_csv
+
+convert_to_csv:
+  call: http.post
+  args:
+    url: "[#DMAPPER]/student/hbs/convert-to-csv"
+    headers:
+      type: json
+    body:
+      json_data: ${student_data}
+  result: csv_data
+  next: extract_csv_data
+
+extract_csv_data:
+  assign:
+    csv_data: ${csv_data.response.body}
+    csv_content: ${csv_data.csv}
+    file_path: ${csv_data.filePath}
+  next: upload_to_s3
+
+upload_to_s3:
+  call: http.post
+  args:
+    url: "[#S3_FERRY]/v1/files/copy"
+    headers:
+      Content-Type: "application/json"
+    body:
+      destinationFilePath: "/student/${id}.csv"
+      destinationStorageType: "S3"
+      sourceFilePath: ${file_path}
+      sourceStorageType: "local"
+  result: upload_response
+  next: return_upload_response
+
+return_upload_response:
+  status: 200
+  return: ${upload_response.response.body}

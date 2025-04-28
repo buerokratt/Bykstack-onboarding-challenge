@@ -1,0 +1,146 @@
+services: 
+  ruuter-public: 
+    container_name: ruuter
+    image: ruuter:latest
+    environment:
+      - application.cors.allowedOrigins=http://localhost:8086,http://localhost:3001,http://localhost:3003,http://localhost:3004,http://localhost:8080,http://localhost:8082
+      - application.httpCodesAllowList=200,201,202,204,400,401,403,500
+      - application.internalRequests.allowedIPs=127.0.0.1,127.0.0.1,172.25.0.7,172.25.0.8,172.25.0.20,172.25.0.21,172.25.0.22
+      - application.logging.displayRequestContent=true
+      - application.logging.displayResponseContent=true
+      - application.logging.printStackTrace=true
+      - application.internalRequests.disabled=true
+      - server.port=8086
+    ports: 
+      - 8086:8086
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.2
+    cpus: "0.5"
+    mem_limit: "512M"
+    volumes: 
+      - ./DSL/Ruuter.public:/DSL
+      - ./constants.ini:/app/constants.ini
+
+  
+  student-postgres:
+    image: postgres:14.1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: student
+      POSTGRES_DB: studentdb
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.10
+    restart: always 
+    ports:
+      - 5433:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    cpus: 0.5
+    mem_limit: 512m
+
+  student-api:
+    build:
+      context: ./generate_students_api/
+      dockerfile: Dockerfile
+    container_name: student-api
+    environment:
+      - DATABASE_URL=postgresql://postgres:student@student-postgres:5432/studentdb
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.15
+    restart: always
+    ports:
+      - "8008:8008"
+    depends_on:
+      - student-postgres
+    cpus: 0.5
+    mem_limit: 512m
+
+  data-mapper:
+    image: data-mapper
+    container_name: data-mapper
+    environment:
+      - PORT=3000
+      - CONTENT_FOLDER=/data
+    volumes: 
+      - ./DSL:/data
+      - ./DSL/DMapper/student/hbs:/wordspace/app/views/student
+      - ./DSL/DMapper/student/js:/workspace/app/js/student
+      - ./DSL/DMapper/student/lib:/workspace/app/lib/student
+      - shared-volume:/shared
+    user: "root"
+    ports:
+      - 3000:3000
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.4
+
+  cron-manager:
+    container_name: cron-manager
+    image: cron-manager-python
+    volumes:
+      - ./DSL/CronManager/DSL:/DSL
+      - ./DSL/CronManager/script:/app/scripts
+      - ./DSL/CronManager/config:/app/config
+      - shared-volume:/shared
+    environment:
+      - server.port=9010
+    ports:
+      - 9010:8080
+    user: "root"
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.11
+    depends_on:
+      - s3-ferry
+
+
+  s3-ferry:
+    image: s3-ferry:latest
+    container_name: s3-ferry
+    volumes:
+      - shared-volume:/shared
+    env_file:
+      - config.env
+    ports:
+      - "3006:3000"
+    user: "root"
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.14
+    
+
+
+  resql: 
+    container_name: obc-resql
+    image: resql
+    depends_on:
+      - student-postgres
+    environment:
+      - sqlms.datasources.[0].name=byk
+      - sqlms.datasources.[0].jdbcUrl=jdbc:postgresql://student-postgres:5432/studentdb
+      - sqlms.datasources.[0].username=postgres
+      - sqlms.datasources.[0].password=student
+      - logging.level.org.springframework.boot=INFO
+    ports:
+      - 8082:8082
+    volumes:
+      - ./DSL/Resql:/DSL
+    networks:
+      obcnet:
+        ipv4_address: 172.25.0.9
+
+networks:
+  obcnet:
+    name: obcnet
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/27
+          gateway: 172.25.0.1
+
+volumes:
+  postgres-data:
+  shared-volume:

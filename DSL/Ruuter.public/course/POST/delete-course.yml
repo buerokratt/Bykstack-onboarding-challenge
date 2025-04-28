@@ -1,0 +1,65 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter  delete course
+  method: post
+  accepts: json
+  returns: json
+  namespace: course
+  allowlist:
+    headers: []
+    body:
+      - field: course_code
+        type: number  
+        description: course ID to delete
+    params: []
+    headers: []
+
+extract_request_data:
+  assign:
+    course_code: ${incoming.body.course_code}
+  next: check_if_exists
+
+check_if_exists:
+  call: http.post
+  args:
+    url: "[#RESQL]/course/retrieve-courses-list"
+    body: 
+      course_code: ${course_code}
+  result: res
+  next: switch_exists
+
+switch_exists:
+  switch:
+    - condition: ${res.response.body.length == 0}
+      next: assign_fail_response
+    - condition: ${res.response.body.length > 0}
+      next: delete_course
+  next: assign_fail_response
+
+assign_fail_response:
+  assign:
+    format_res: {
+      modelId: '',
+      operationSuccessful: false,
+    }
+  next: return_no_such_course
+
+return_no_such_course:
+  status: 400
+  return: ${format_res}
+  next: end
+
+delete_course:
+  call: http.post
+  args:
+    url: "[#RESQL]/course/delete-course"
+    body: 
+      course_code: ${course_code}
+  result: res
+  return: ${res.response}
+  next: return_course_details
+
+return_course_details:
+  status: 200
+  return: ${res.response.body}

@@ -1,0 +1,84 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter public student deletion
+  method: post
+  accepts: json
+  returns: json
+  namespace: student
+  allowlist:
+    headers: []
+    body:
+      - field: id
+        type: number  
+        description: Student ID to delete
+    params: []
+    headers: []
+
+extract_request_data:
+  assign:
+    id: ${incoming.body.id}
+  next: check_if_exists
+
+check_if_exists:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/retrieve-student-details"
+    body: 
+      id: ${id}
+  result: res
+  next: switch_exists
+
+switch_exists:
+  switch:
+    - condition: ${res.response.body.length == 0}
+      next: return_no_such_student
+    - condition: ${res.response.body.length > 0}
+      next: delete_grades
+
+return_no_such_student:
+  status: 400
+  return: "Error: No such student"
+  next: end
+
+
+delete_grades:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/delete-grades"
+    body: 
+      id: ${id}
+  result: res
+  next: delete_attendance
+
+delete_attendance:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/delete-attendance"
+    body: 
+      id: ${id}
+  result: res
+  next: delete_enrollments
+
+delete_enrollments:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/delete-enrollments"
+    body: 
+      id: ${id}
+  result: res
+  next: delete_student
+
+
+delete_student:
+  call: http.post
+  args:
+    url: "[#RESQL]/student/delete-student"
+    body: 
+      id: ${id}
+  result: res
+  next: return_student_details
+
+return_student_details:
+  status: 200
+  return: ${res.response.body}

@@ -1,0 +1,34 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter public course list 
+  method: get
+  accepts: json
+  returns: json
+  namespace: course
+  allowlist:
+    headers: []
+    body: 
+      - field: course_code
+        type: number  
+        description: Course ID to retrieve details
+    params: []
+
+extract_request_data:
+  assign:
+    course_code: ${incoming.body.course_code}
+  next: get_student_list
+
+get_student_list:
+  call: http.post
+  args:
+    url: "[#RESQL]/course/retrieve-courses-list"
+    body: 
+      course_code: ${course_code}
+  result: res
+  return: ${res.response}
+  next: return_result
+
+return_result:
+  status: 200
+  return: ${res.response.body}
