@@ -1,0 +1,27 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter public student generations
+  method: post
+  accepts: json
+  returns: json
+  namespace: student
+  allowlist:
+    headers: []
+    body: []
+    params: []
+
+
+
+
+generate_students:
+  call: http.post
+  args:
+    url: "[#CRONMANAGER]/execute/generate_students"
+  result: res
+  return: ${res.response}
+  next: return_result
+
+return_result:
+  status: 200
+  return: ${res.response.body}

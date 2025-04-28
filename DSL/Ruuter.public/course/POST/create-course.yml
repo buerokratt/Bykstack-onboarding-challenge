@@ -1,0 +1,87 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter  create course
+  method: post
+  accepts: json
+  returns: json
+  namespace: course
+  allowlist:
+    headers: []
+    body:
+      - field: course_code
+        type: number  
+        description: course ID 
+      - field: course_name
+        type: string  
+        description: course name 
+      - field: description
+        type: string  
+        description: course description
+      - field: credits
+        type: number  
+        description: course credits 
+      - field: instructor_id
+        type: number  
+        description: instructor ID
+      - field: schedule
+        type?: string  
+        description: course schedule
+    params: []
+    headers: []
+
+extract_request_data:
+  assign:
+    course_code: ${incoming.body.course_code}
+    course_name: ${incoming.body.course_name}
+    description: ${incoming.body.description}
+    credits: ${incoming.body.credits}
+    instructor_id: ${incoming.body.instructor_id}
+    schedule: ${incoming.body.schedule}
+  next: check_if_exists
+
+check_if_exists:
+  call: http.post
+  args:
+    url: "[#RESQL]/course/retrieve-courses-list"
+    body: 
+      course_code: ${course_code}
+  result: res
+  return: ${res.response}
+  next: debug_response
+
+debug_response:
+  log: "${res.response.body}"
+  next: switch_exists
+
+
+switch_exists:
+  switch:
+    - condition: ${res.response.body.length == 0}
+      next: create_course
+    - condition: ${res.response.body.length > 0}
+      next: return_course_exists
+
+return_course_exists:
+  status: 400
+  return: "Error: Course with this code already exists"
+  next: end
+
+
+create_course:
+  call: http.post
+  args:
+    url: "[#RESQL]/course/create-course"
+    body: 
+      course_code: ${course_code}
+      course_name: ${course_name}
+      description: ${description}
+      credits: ${credits}
+      instructor_id: ${instructor_id}
+      schedule: ${schedule}
+  result: res
+  next: return_course_details
+
+return_course_details:
+  status: 200
+  return: ${res.response.body}

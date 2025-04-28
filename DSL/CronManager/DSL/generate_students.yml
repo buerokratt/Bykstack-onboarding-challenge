@@ -1,0 +1,5 @@
+generate_students:
+  trigger: off
+  type: exec
+  command: "../app/script/generate_students.sh"
+  allowedEnvs: []

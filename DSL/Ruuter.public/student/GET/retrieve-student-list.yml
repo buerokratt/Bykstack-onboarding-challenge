@@ -1,0 +1,24 @@
+declare:
+  call: declare
+  version: 0.1
+  description: DSL for Ruuter public student list retrieval
+  method: get
+  accepts: json
+  returns: json
+  namespace: student
+  allowlist:
+    headers: []
+    body: []
+    params: []
+
+get_student_list:
+  call: http.get
+  args:
+    url: "[#RESQL]/student/retrieve-student-list"
+  result: res
+  return: ${res.response}
+  next: return_result
+
+return_result:
+  status: 200
+  return: ${res.response.body}
